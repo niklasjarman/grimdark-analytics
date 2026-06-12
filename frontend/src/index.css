@@ -1,0 +1,55 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+  body {
+    @apply bg-grim-bg text-gray-200 font-body antialiased;
+    background-image: radial-gradient(
+        circle at 20% -10%,
+        rgba(139, 0, 0, 0.08),
+        transparent 45%
+      ),
+      radial-gradient(circle at 90% 0%, rgba(196, 30, 58, 0.05), transparent 40%);
+    background-attachment: fixed;
+  }
+  h1, h2, h3 {
+    font-family: 'Cinzel', Georgia, serif;
+    letter-spacing: 0.02em;
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-grim-card border border-grim-border rounded-xl shadow-glow;
+  }
+  .card-hover {
+    @apply transition-all duration-200 hover:border-blood-bright/50 hover:shadow-glow-strong;
+  }
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: #0a0a0f;
+}
+::-webkit-scrollbar-thumb {
+  background: #2a2a3a;
+  border-radius: 5px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #8b0000;
+}
+
+/* Recharts tooltip cursor */
+.recharts-default-tooltip {
+  background-color: #13131a !important;
+  border: 1px solid #1e1e2e !important;
+  border-radius: 8px !important;
+}
