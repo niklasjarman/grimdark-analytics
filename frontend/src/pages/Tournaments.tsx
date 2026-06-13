@@ -4,9 +4,11 @@ import { api } from '../api/client'
 import { PageHeader } from '../components/PageHeader'
 import { StatCard } from '../components/StatCard'
 import { Loading, ErrorState, Empty } from '../components/States'
-import { FormatBadge } from '../components/FactionBadge'
-import { formatDate } from '../lib/format'
-import type { Tournament } from '../api/types'
+import { FactionBadge, FormatBadge } from '../components/FactionBadge'
+import { WinRateBar } from '../components/WinRateBar'
+import { factionColor, factionImage } from '../lib/factions'
+import { formatDate, pct } from '../lib/format'
+import type { Tournament, TournamentResultEntry } from '../api/types'
 
 export function Tournaments() {
   const { id } = useParams()
@@ -77,14 +79,20 @@ function TournamentCard({ t }: { t: Tournament }) {
 }
 
 function TournamentDetail({ id }: { id: number }) {
-  const { data, isLoading, isError, error } = useQuery({
+  const tournament = useQuery({
     queryKey: ['tournament', id],
     queryFn: () => api.getTournament(id),
   })
+  const results = useQuery({
+    queryKey: ['tournament-results', id],
+    queryFn: () => api.getTournamentResults(id),
+  })
 
-  if (isLoading) return <Loading />
-  if (isError) return <ErrorState error={error} />
-  if (!data) return <Empty />
+  if (tournament.isLoading) return <Loading />
+  if (tournament.isError) return <ErrorState error={tournament.error} />
+  if (!tournament.data) return <Empty />
+
+  const data = tournament.data
 
   return (
     <div>
@@ -106,15 +114,210 @@ function TournamentDetail({ id }: { id: number }) {
         <StatCard label="Location" value={data.location} />
       </section>
 
-      <div className="card p-6 mt-6 text-sm text-gray-400">
-        <h2 className="font-gothic text-lg text-gray-100 mb-2">Event Briefing</h2>
-        <p>
-          <span className="text-blood-bright font-semibold">{data.name}</span> was
-          a {data.format} format event held in {data.location} on{' '}
-          {formatDate(data.date)}, drawing {data.playerCount} commanders to the
-          battlefield.
-        </p>
-      </div>
+      {results.isLoading ? (
+        <div className="mt-8"><Loading label="Marshalling forces…" /></div>
+      ) : results.isError ? (
+        <div className="mt-8"><ErrorState error={results.error} /></div>
+      ) : results.data && results.data.length > 0 ? (
+        <>
+          <FactionShowcase results={results.data} />
+          <ResultsTable results={results.data} />
+        </>
+      ) : (
+        <div className="card p-6 mt-6 text-sm text-gray-400">
+          <h2 className="font-gothic text-lg text-gray-100 mb-2">Event Briefing</h2>
+          <p>
+            <span className="text-blood-bright font-semibold">{data.name}</span> was
+            a {data.format} format event held in {data.location} on{' '}
+            {formatDate(data.date)}, drawing {data.playerCount} commanders to the
+            battlefield.
+          </p>
+        </div>
+      )}
     </div>
+  )
+}
+
+function FactionShowcase({ results }: { results: TournamentResultEntry[] }) {
+  // Count players per faction and find the winner per faction
+  const factionMap = new Map<string, { count: number; bestPlacement: number }>()
+  for (const r of results) {
+    const existing = factionMap.get(r.faction)
+    if (!existing) {
+      factionMap.set(r.faction, { count: 1, bestPlacement: r.placement })
+    } else {
+      factionMap.set(r.faction, {
+        count: existing.count + 1,
+        bestPlacement: Math.min(existing.bestPlacement, r.placement),
+      })
+    }
+  }
+  const top = [...factionMap.entries()]
+    .sort((a, b) => b[1].count - a[1].count || a[1].bestPlacement - b[1].bestPlacement)
+    .slice(0, 4)
+
+  return (
+    <section className="mt-8">
+      <h2 className="font-gothic text-xl text-gray-100 mb-4">Armies of the Field</h2>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {top.map(([faction, { count, bestPlacement }]) => (
+          <FactionCard
+            key={faction}
+            faction={faction}
+            playerCount={count}
+            bestPlacement={bestPlacement}
+          />
+        ))}
+      </div>
+    </section>
+  )
+}
+
+function FactionCard({
+  faction,
+  playerCount,
+  bestPlacement,
+}: {
+  faction: string
+  playerCount: number
+  bestPlacement: number
+}) {
+  const color = factionColor(faction)
+  const imgUrl = factionImage(faction)
+
+  return (
+    <Link
+      to={`/factions/${encodeURIComponent(faction)}`}
+      className="relative overflow-hidden rounded-xl border border-grim-border group"
+      style={{ minHeight: 180 }}
+    >
+      {/* Background: image or gradient */}
+      {imgUrl ? (
+        <img
+          src={imgUrl}
+          alt={faction}
+          className="absolute inset-0 w-full h-full object-cover object-center opacity-40 group-hover:opacity-55 transition-opacity duration-500 scale-105 group-hover:scale-100 transition-transform"
+          onError={(e) => {
+            const el = e.currentTarget
+            el.style.display = 'none'
+          }}
+        />
+      ) : null}
+      {/* Gradient overlay */}
+      <div
+        className="absolute inset-0"
+        style={{
+          background: `linear-gradient(160deg, ${color}22 0%, #0a0a0f 80%)`,
+        }}
+      />
+      {/* Top accent line */}
+      <div
+        className="absolute inset-x-0 top-0 h-0.5"
+        style={{ background: `linear-gradient(90deg, transparent, ${color}, transparent)` }}
+      />
+      {/* Content */}
+      <div className="relative p-4 flex flex-col justify-between h-full" style={{ minHeight: 180 }}>
+        {bestPlacement === 1 && (
+          <span className="self-start text-xs font-bold uppercase tracking-widest px-2 py-0.5 rounded"
+            style={{ background: `${color}33`, color }}>
+            Champion
+          </span>
+        )}
+        <div className="mt-auto">
+          <p className="font-gothic text-base font-bold leading-tight" style={{ color }}>
+            {faction}
+          </p>
+          <p className="text-xs text-gray-500 mt-1">
+            {playerCount} {playerCount === 1 ? 'commander' : 'commanders'}
+          </p>
+        </div>
+      </div>
+    </Link>
+  )
+}
+
+function ResultsTable({ results }: { results: TournamentResultEntry[] }) {
+  return (
+    <section className="card overflow-hidden mt-8">
+      <div className="px-5 py-4 border-b border-grim-border flex items-center justify-between">
+        <h2 className="font-gothic text-xl text-gray-100">Final Standings</h2>
+        <span className="text-xs text-gray-600 uppercase tracking-widest">
+          {results.length} commanders
+        </span>
+      </div>
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="text-left text-xs uppercase tracking-wider text-gray-500 border-b border-grim-border">
+            <th className="px-5 py-3 font-medium w-16 text-center">#</th>
+            <th className="px-5 py-3 font-medium">Commander</th>
+            <th className="px-5 py-3 font-medium">Army</th>
+            <th className="px-5 py-3 font-medium text-center">Record</th>
+            <th className="px-5 py-3 font-medium hidden md:table-cell">Win Rate</th>
+          </tr>
+        </thead>
+        <tbody>
+          {results.map((r) => {
+            const total = r.wins + r.losses + r.draws
+            const rate = total > 0 ? r.wins / total : 0
+            return (
+              <tr
+                key={r.playerId}
+                className="border-b border-grim-border/60 last:border-0 hover:bg-grim-hover transition-colors"
+              >
+                <td className="px-5 py-3 text-center">
+                  <PlacementBadge place={r.placement} />
+                </td>
+                <td className="px-5 py-3">
+                  <Link
+                    to={`/players`}
+                    className="text-gray-100 hover:text-blood-bright transition-colors font-medium"
+                  >
+                    {r.playerName}
+                  </Link>
+                </td>
+                <td className="px-5 py-3">
+                  <FactionBadge faction={r.faction} />
+                </td>
+                <td className="px-5 py-3 text-center tabular-nums text-gray-300">
+                  <span className="text-emerald-400">{r.wins}</span>
+                  {' / '}
+                  <span className="text-red-400">{r.losses}</span>
+                  {' / '}
+                  <span className="text-gray-400">{r.draws}</span>
+                </td>
+                <td className="px-5 py-3 hidden md:table-cell min-w-[140px]">
+                  <div className="flex items-center gap-2">
+                    <WinRateBar rate={rate} height={6} />
+                    <span className="text-xs tabular-nums text-gray-500 w-10 text-right">
+                      {pct(rate)}
+                    </span>
+                  </div>
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </section>
+  )
+}
+
+function PlacementBadge({ place }: { place: number }) {
+  const medal =
+    place === 1
+      ? 'text-yellow-400 border-yellow-400/40 bg-yellow-400/10'
+      : place === 2
+      ? 'text-gray-300 border-gray-400/40 bg-gray-400/10'
+      : place === 3
+      ? 'text-amber-600 border-amber-600/40 bg-amber-600/10'
+      : 'text-gray-500 border-grim-border bg-grim-bg'
+  const label =
+    place === 1 ? '1st' : place === 2 ? '2nd' : place === 3 ? '3rd' : `${place}th`
+  return (
+    <span
+      className={`inline-flex items-center justify-center min-w-[2.5rem] px-2 py-1 rounded-md text-sm font-bold border ${medal}`}
+    >
+      {label}
+    </span>
   )
 }

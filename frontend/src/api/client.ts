@@ -1,5 +1,6 @@
 import type {
   Tournament,
+  TournamentResultEntry,
   FactionWinRate,
   FactionTrend,
   Matchup,
@@ -36,6 +37,8 @@ export const api = {
   },
 
   getTournament: (id: number) => http<Tournament>(`/tournaments/${id}`),
+
+  getTournamentResults: (id: number) => http<TournamentResultEntry[]>(`/tournaments/${id}/results`),
 
   getFactionWinRates: () => http<FactionWinRate[]>('/factions/winrates'),
 

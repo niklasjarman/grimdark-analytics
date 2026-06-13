@@ -62,6 +62,16 @@ export interface Player {
   results: PlayerResult[]
 }
 
+export interface TournamentResultEntry {
+  playerId: number
+  playerName: string
+  faction: string
+  placement: number
+  wins: number
+  losses: number
+  draws: number
+}
+
 export interface MetaSnapshot {
   generatedAt: string
   totalTournaments: number

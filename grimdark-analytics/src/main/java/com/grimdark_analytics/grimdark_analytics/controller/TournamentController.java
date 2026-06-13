@@ -1,5 +1,6 @@
 package com.grimdark_analytics.grimdark_analytics.controller;
 
+import com.grimdark_analytics.grimdark_analytics.dto.TournamentResultEntryDto;
 import com.grimdark_analytics.grimdark_analytics.dto.request.CreateMatchupRequest;
 import com.grimdark_analytics.grimdark_analytics.dto.request.CreateTournamentRequest;
 import com.grimdark_analytics.grimdark_analytics.dto.request.CreateTournamentResultRequest;
@@ -48,6 +49,12 @@ public class TournamentController {
         return tournamentService.getTournamentById(id)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
+    }
+
+    @GetMapping("/{id}/results")
+    @Operation(summary = "Get all player results for a tournament, sorted by placement")
+    public List<TournamentResultEntryDto> getTournamentResults(@PathVariable Long id) {
+        return tournamentResultService.getResultsForTournament(id);
     }
 
     @PostMapping
